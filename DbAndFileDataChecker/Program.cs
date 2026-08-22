@@ -16,6 +16,7 @@ async Task<int> MainAsync(string[] args)
     }
 
     string? filePath = null;
+    string? configPath = null;
 
     for (int i = 0; i < args.Length; i++)
     {
@@ -28,13 +29,29 @@ async Task<int> MainAsync(string[] args)
                 i++;
             }
         }
+        else if (a == "--config" || a == "-c")
+        {
+            if (i + 1 < args.Length)
+            {
+                configPath = args[i + 1];
+                i++;
+            }
+        }
         else if (a.StartsWith("--file="))
         {
             filePath = a.Substring("--file=".Length);
         }
+        else if (a.StartsWith("--config="))
+        {
+            configPath = a.Substring("--config=".Length);
+        }
         else if (a.StartsWith("-f="))
         {
             filePath = a.Substring("-f=".Length);
+        }
+        else if (a.StartsWith("-c="))
+        {
+            configPath = a.Substring("-c=".Length);
         }
         else if (a == "-h" || a == "--help")
         {
@@ -50,9 +67,16 @@ async Task<int> MainAsync(string[] args)
         return 1;
     }
 
+    if (string.IsNullOrWhiteSpace(configPath))
+    {
+        Console.Error.WriteLine("Missing required --config / -c argument.");
+        PrintUsage();
+        return 1;
+    }
+
     try
     {
-        var nonMatches = await CsvDbMatcher.FindNonMatchingLineNumbersAsync(filePath, CancellationToken.None).ConfigureAwait(false);
+        var nonMatches = await CsvDbMatcher.FindNonMatchingLineNumbersAsync(filePath, configPath, CancellationToken.None).ConfigureAwait(false);
         if (nonMatches == null || nonMatches.Count == 0)
         {
             Console.WriteLine("All rows matched the database query.");
@@ -77,6 +101,7 @@ static void PrintUsage()
     Console.WriteLine("Usage: dotnet run -- --file <path>    or    dotnet run -- -f <path>");
     Console.WriteLine("Options:");
     Console.WriteLine("  -f, --file <path>    Path to CSV file to check");
+    Console.WriteLine("  -c, --config <path>  Path to JSON query config file");
     Console.WriteLine("  -h, --help           Show this help");
 }
 
