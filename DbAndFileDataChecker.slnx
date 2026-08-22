@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="DbAndFileDataChecker.Tests/DbAndFileDataChecker.Tests.csproj" Id="12de83c3-e635-46a4-95bf-dff7753a6426" />
+  <Project Path="DbAndFileDataChecker/DbAndFileDataChecker.csproj" />
+</Solution>

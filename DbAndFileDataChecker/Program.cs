@@ -1,0 +1,83 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Linq;
+// Usage: dotnet run -- --file <path>    or  dotnet run -- -f <path>
+
+async Task<int> MainAsync(string[] args)
+{
+    if (args is null)
+    {
+        Console.Error.WriteLine("No arguments provided.");
+        PrintUsage();
+        return 1;
+    }
+
+    string? filePath = null;
+
+    for (int i = 0; i < args.Length; i++)
+    {
+        var a = args[i];
+        if (a == "--file" || a == "-f")
+        {
+            if (i + 1 < args.Length)
+            {
+                filePath = args[i + 1];
+                i++;
+            }
+        }
+        else if (a.StartsWith("--file="))
+        {
+            filePath = a.Substring("--file=".Length);
+        }
+        else if (a.StartsWith("-f="))
+        {
+            filePath = a.Substring("-f=".Length);
+        }
+        else if (a == "-h" || a == "--help")
+        {
+            PrintUsage();
+            return 0;
+        }
+    }
+
+    if (string.IsNullOrWhiteSpace(filePath))
+    {
+        Console.Error.WriteLine("Missing required --file / -f argument.");
+        PrintUsage();
+        return 1;
+    }
+
+    try
+    {
+        var nonMatches = await CsvDbMatcher.FindNonMatchingLineNumbersAsync(filePath, CancellationToken.None).ConfigureAwait(false);
+        if (nonMatches == null || nonMatches.Count == 0)
+        {
+            Console.WriteLine("All rows matched the database query.");
+        }
+        else
+        {
+            Console.WriteLine($"Non-matching line count: {nonMatches.Count}");
+            Console.WriteLine(string.Join(',', nonMatches.Select(n => n.ToString())));
+        }
+
+        return 0;
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error: {ex.Message}");
+        return 2;
+    }
+}
+
+static void PrintUsage()
+{
+    Console.WriteLine("Usage: dotnet run -- --file <path>    or    dotnet run -- -f <path>");
+    Console.WriteLine("Options:");
+    Console.WriteLine("  -f, --file <path>    Path to CSV file to check");
+    Console.WriteLine("  -h, --help           Show this help");
+}
+
+return await MainAsync(args);

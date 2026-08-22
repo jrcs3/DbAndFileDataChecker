@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "DbAndFileDataChecker": {
+      "commandName": "Project",
+      "commandLineArgs": "-f C:\\Users\\ajacs\\source\\repos\\DbAndFileDataChecker\\DbAndFileDataChecker.Tests\\SampleData\\UpperMidwest.csv"
+    }
+  }
+}
