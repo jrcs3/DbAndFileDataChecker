@@ -195,48 +195,48 @@ public class CsvDbMatcher
 
     private static void BuildParamaters(QueryConfig queryConfig, DbCommand cmd)
     {
-        // Build parameters from configuration
+        // Build parameters from configuration using provider-agnostic DbParameter
         foreach (ParameterConfig p in queryConfig.Parameters)
         {
             string paramName = p.Name!;
-            SqlParameter sqlParam;
+            DbParameter dbParam = cmd.CreateParameter();
+            dbParam.ParameterName = paramName;
             string dbType = (p.DbType ?? "").Trim();
             switch (dbType.ToLowerInvariant())
             {
                 case "int":
-                    sqlParam = new SqlParameter(paramName, SqlDbType.Int);
+                    dbParam.DbType = System.Data.DbType.Int32;
                     break;
                 case "nvarchar":
-                    int size = p.Size ?? -1;
-                    sqlParam = new SqlParameter(paramName, SqlDbType.NVarChar, size);
-                    break;
                 case "varchar":
-                    int vsize = p.Size ?? -1;
-                    sqlParam = new SqlParameter(paramName, SqlDbType.VarChar, vsize);
+                    dbParam.DbType = System.Data.DbType.String;
+                    int size = p.Size ?? -1;
+                    if (size > 0) dbParam.Size = size;
                     break;
                 case "datetime":
-                    sqlParam = new SqlParameter(paramName, SqlDbType.DateTime);
+                    dbParam.DbType = System.Data.DbType.DateTime;
                     break;
                 case "bit":
-                    sqlParam = new SqlParameter(paramName, SqlDbType.Bit);
+                    dbParam.DbType = System.Data.DbType.Boolean;
                     break;
                 case "float":
-                    sqlParam = new SqlParameter(paramName, SqlDbType.Float);
+                    dbParam.DbType = System.Data.DbType.Double;
                     break;
                 case "decimal":
-                    sqlParam = new SqlParameter(paramName, SqlDbType.Decimal);
+                    dbParam.DbType = System.Data.DbType.Decimal;
                     break;
                 case "uniqueidentifier":
-                    sqlParam = new SqlParameter(paramName, SqlDbType.UniqueIdentifier);
+                    dbParam.DbType = System.Data.DbType.Guid;
                     break;
                 default:
+                    dbParam.DbType = System.Data.DbType.String;
                     int defSize = p.Size ?? -1;
-                    sqlParam = new SqlParameter(paramName, SqlDbType.NVarChar, defSize);
+                    if (defSize > 0) dbParam.Size = defSize;
                     break;
             }
 
             // Add the parameter now; value will be set per-row
-            cmd.Parameters.Add(sqlParam);
+            cmd.Parameters.Add(dbParam);
         }
     }
 
