@@ -53,6 +53,10 @@ public class CsvDbMatcher
     /// </summary>
     public async Task<List<int>> FindNonMatchingLineNumbersFromContentAsync(string csvContent, QueryConfig queryConfig, CancellationToken ct = default)
     {
+        if (queryConfig.Parameters == null || string.IsNullOrWhiteSpace(queryConfig.Name))
+            throw new ArgumentNullException(nameof(queryConfig), "Invalid QueryConfig");
+        Console.WriteLine($"Processing '{queryConfig.Name}'...");
+
         if (csvContent is null) throw new ArgumentNullException(nameof(csvContent));
 
         List<int> nonMatches = new List<int>();
