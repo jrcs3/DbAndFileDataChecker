@@ -65,6 +65,9 @@ public class CsvDbMatcher
         if (queryConfig.Parameters == null || queryConfig.Parameters.Count == 0)
             throw new InvalidOperationException("Query configuration must define at least one parameter in 'Parameters'.");
 
+        if (queryConfig.CommandText is null || !queryConfig.CommandText.Contains("@"))
+            throw new InvalidOperationException("Query configuration must define a CommandText with at least one parameter placeholder (e.g. '@Title').");
+
         // Validate parameter names and types and duplicates
         HashSet<string> supportedTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -164,6 +167,9 @@ public class CsvDbMatcher
 
     private static bool SetParmameters(QueryConfig queryConfig, List<int> nonMatches, CsvReader csv, DbCommand cmd, int fileLine)
     {
+        if (queryConfig.Parameters == null)
+            throw new InvalidOperationException("SetParmameters: QueryConfig.Parameters is null");
+
         bool skipRow = false;
         foreach (ParameterConfig p in queryConfig.Parameters)
         {
@@ -195,6 +201,9 @@ public class CsvDbMatcher
 
     private static void BuildParamaters(QueryConfig queryConfig, DbCommand cmd)
     {
+        if (queryConfig.Parameters == null)
+            throw new InvalidOperationException("BuildParamaters: QueryConfig.Parameters is null");
+
         // Build parameters from configuration using provider-agnostic DbParameter
         foreach (ParameterConfig p in queryConfig.Parameters)
         {
