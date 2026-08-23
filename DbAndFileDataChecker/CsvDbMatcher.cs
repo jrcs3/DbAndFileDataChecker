@@ -1,26 +1,27 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Data;
-using System.Globalization;
-using System.IO;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using CsvHelper;
 using CsvHelper.Configuration;
 using Microsoft.Data.SqlClient;
+using System.Data;
+using System.Data.Common;
+using System.Globalization;
+using System.Text.Json;
 
 // Example usage:
 // var nonMatches = await CsvDbMatcher.FindNonMatchingLineNumbersAsync("..\\DbAndFileDataChecker.Tests\\SampleData\\UpperMidwest.csv", "..\\DbAndFileDataChecker.Tests\\RomanceCompare.json");
 // Console.WriteLine(string.Join(",", nonMatches));
 
-public static class CsvDbMatcher
+public class CsvDbMatcher
 {
+    private readonly IDbCommandFactory _factory;
+
+    public CsvDbMatcher(IDbCommandFactory factory)
+    {
+        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    }
     /// <summary>
     /// Read CSV and JSON config files from disk and run the configured query per row.
     /// </summary>
-    public static async Task<List<int>> FindNonMatchingLineNumbersAsync(string csvFilePath, string configJsonPath, CancellationToken ct = default)
+    public async Task<List<int>> FindNonMatchingLineNumbersAsync(string csvFilePath, string configJsonPath, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(csvFilePath))
             throw new ArgumentNullException(nameof(csvFilePath));
@@ -34,8 +35,8 @@ public static class CsvDbMatcher
         if (!File.Exists(configJsonPath))
             throw new FileNotFoundException("Query configuration JSON file not found", configJsonPath);
 
-        var csvText = await File.ReadAllTextAsync(csvFilePath).ConfigureAwait(false);
-        var configText = await File.ReadAllTextAsync(configJsonPath).ConfigureAwait(false);
+        string csvText = await File.ReadAllTextAsync(csvFilePath).ConfigureAwait(false);
+        string? configText = await File.ReadAllTextAsync(configJsonPath).ConfigureAwait(false);
 
         if (configText is null) throw new ArgumentNullException(nameof(configText));
 
@@ -50,30 +51,30 @@ public static class CsvDbMatcher
     /// <summary>
     /// Core logic extracted to operate on loaded CSV and JSON content. This is public so tests can call it directly.
     /// </summary>
-    public static async Task<List<int>> FindNonMatchingLineNumbersFromContentAsync(string csvContent, QueryConfig queryConfig, CancellationToken ct = default)
+    public async Task<List<int>> FindNonMatchingLineNumbersFromContentAsync(string csvContent, QueryConfig queryConfig, CancellationToken ct = default)
     {
         if (csvContent is null) throw new ArgumentNullException(nameof(csvContent));
 
-        var nonMatches = new List<int>();
+        List<int> nonMatches = new List<int>();
 
         // Basic JSON validation
         if (queryConfig.Parameters == null || queryConfig.Parameters.Count == 0)
             throw new InvalidOperationException("Query configuration must define at least one parameter in 'Parameters'.");
 
         // Validate parameter names and types and duplicates
-        var supportedTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        HashSet<string> supportedTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "int", "nvarchar", "varchar", "datetime", "bit", "float", "decimal", "uniqueidentifier"
         };
 
-        var duplicateNames = queryConfig.Parameters.GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+        string?[] duplicateNames = queryConfig.Parameters.GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
             .Where(g => !string.IsNullOrWhiteSpace(g.Key) && g.Count() > 1)
             .Select(g => g.Key)
             .ToArray();
         if (duplicateNames.Length > 0)
             throw new InvalidOperationException($"Duplicate parameter names found in configuration: {string.Join(',', duplicateNames)}");
 
-        foreach (var p in queryConfig.Parameters)
+        foreach (ParameterConfig p in queryConfig.Parameters)
         {
             if (string.IsNullOrWhiteSpace(p.Name))
                 throw new InvalidOperationException("Each parameter must have a non-empty 'Name' field (e.g. '@Title').");
@@ -86,11 +87,11 @@ public static class CsvDbMatcher
         }
 
         // Ensure parameter placeholders appear in the command text
-        var missingInCommand = queryConfig.Parameters.Where(p => !queryConfig.CommandText.Contains(p.Name!, StringComparison.OrdinalIgnoreCase)).Select(p => p.Name).ToArray();
+        string?[] missingInCommand = queryConfig.Parameters.Where(p => !queryConfig.CommandText.Contains(p.Name!, StringComparison.OrdinalIgnoreCase)).Select(p => p.Name).ToArray();
         if (missingInCommand.Length > 0)
             throw new InvalidOperationException($"The following parameters are not referenced in CommandText: {string.Join(',', missingInCommand)}");
 
-        var csvConfig = new CsvConfiguration(CultureInfo.InvariantCulture)
+        CsvConfiguration csvConfig = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
             HasHeaderRecord = true,
             MissingFieldFound = null,
@@ -98,18 +99,18 @@ public static class CsvDbMatcher
             BadDataFound = null
         };
 
-        using var reader = new StringReader(csvContent);
-        using var csv = new CsvReader(reader, csvConfig);
+        using StringReader reader = new StringReader(csvContent);
+        using CsvReader csv = new CsvReader(reader, csvConfig);
 
         // Read header (line 1)
         if (!await csv.ReadAsync().ConfigureAwait(false))
             return nonMatches; // empty file
 
         csv.ReadHeader();
-        var header = csv.HeaderRecord ?? Array.Empty<string>();
+        string[] header = csv.HeaderRecord ?? Array.Empty<string>();
 
         // Validate that all SourceColumn values exist in CSV header
-        var missingSourceColumns = queryConfig.Parameters
+        string[] missingSourceColumns = queryConfig.Parameters
             .Where(p => !string.IsNullOrWhiteSpace(p.SourceColumn))
             .Select(p => p.SourceColumn!)
             .Where(sc => !header.Contains(sc))
@@ -122,14 +123,14 @@ public static class CsvDbMatcher
         }
 
         // Now that validation passed, open DB connection
-        var connStr = !string.IsNullOrWhiteSpace(queryConfig.ConnectionString)
+        string connStr = !string.IsNullOrWhiteSpace(queryConfig.ConnectionString)
             ? queryConfig.ConnectionString
             : await GetDefaultConnectionStringAsync().ConfigureAwait(false);
 
-        await using SqlConnection conn = new SqlConnection(connStr);
+        using DbConnection conn = _factory.CreateConnection(connStr);
         await conn.OpenAsync(ct).ConfigureAwait(false);
 
-        await using var cmd = conn.CreateCommand();
+        using DbCommand cmd = conn.CreateCommand();
         cmd.CommandText = queryConfig.CommandText;
 
         BuildParamaters(queryConfig, cmd);
@@ -147,8 +148,8 @@ public static class CsvDbMatcher
             if (skipRow)
                 continue;
 
-            var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
-            var matchCount = result is null || result is DBNull ? 0 : Convert.ToInt32(result);
+            object? result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            int matchCount = result is null || result is DBNull ? 0 : Convert.ToInt32(result);
 
             if (matchCount <= 0)
                 nonMatches.Add(fileLine);
@@ -157,19 +158,19 @@ public static class CsvDbMatcher
         return nonMatches;
     }
 
-    private static bool SetParmameters(QueryConfig queryConfig, List<int> nonMatches, CsvReader csv, SqlCommand cmd, int fileLine)
+    private static bool SetParmameters(QueryConfig queryConfig, List<int> nonMatches, CsvReader csv, DbCommand cmd, int fileLine)
     {
-        var skipRow = false;
-        foreach (var p in queryConfig.Parameters)
+        bool skipRow = false;
+        foreach (ParameterConfig p in queryConfig.Parameters)
         {
-            var paramName = p.Name!;
-            var sourceCol = p.SourceColumn ?? string.Empty;
-            var raw = csv.TryGetField(sourceCol, out string? val) ? val?.Trim() : null;
+            string paramName = p.Name!;
+            string sourceCol = p.SourceColumn ?? string.Empty;
+            string? raw = csv.TryGetField(sourceCol, out string? val) ? val?.Trim() : null;
 
-            var dbType = (p.DbType ?? "").Trim();
+            string dbType = (p.DbType ?? "").Trim();
             if (dbType.Equals("int", StringComparison.OrdinalIgnoreCase))
             {
-                if (!int.TryParse(raw, out var parsedInt))
+                if (!int.TryParse(raw, out int parsedInt))
                 {
                     // Treat missing/non-integer as non-match
                     nonMatches.Add(fileLine);
@@ -188,25 +189,25 @@ public static class CsvDbMatcher
         return skipRow;
     }
 
-    private static void BuildParamaters(QueryConfig queryConfig, SqlCommand cmd)
+    private static void BuildParamaters(QueryConfig queryConfig, DbCommand cmd)
     {
         // Build parameters from configuration
-        foreach (var p in queryConfig.Parameters)
+        foreach (ParameterConfig p in queryConfig.Parameters)
         {
-            var paramName = p.Name!;
+            string paramName = p.Name!;
             SqlParameter sqlParam;
-            var dbType = (p.DbType ?? "").Trim();
+            string dbType = (p.DbType ?? "").Trim();
             switch (dbType.ToLowerInvariant())
             {
                 case "int":
                     sqlParam = new SqlParameter(paramName, SqlDbType.Int);
                     break;
                 case "nvarchar":
-                    var size = p.Size ?? -1;
+                    int size = p.Size ?? -1;
                     sqlParam = new SqlParameter(paramName, SqlDbType.NVarChar, size);
                     break;
                 case "varchar":
-                    var vsize = p.Size ?? -1;
+                    int vsize = p.Size ?? -1;
                     sqlParam = new SqlParameter(paramName, SqlDbType.VarChar, vsize);
                     break;
                 case "datetime":
@@ -225,7 +226,7 @@ public static class CsvDbMatcher
                     sqlParam = new SqlParameter(paramName, SqlDbType.UniqueIdentifier);
                     break;
                 default:
-                    var defSize = p.Size ?? -1;
+                    int defSize = p.Size ?? -1;
                     sqlParam = new SqlParameter(paramName, SqlDbType.NVarChar, defSize);
                     break;
             }
@@ -237,14 +238,14 @@ public static class CsvDbMatcher
 
     private static async Task<string> GetDefaultConnectionStringAsync()
     {
-        var baseDir = AppContext.BaseDirectory;
-        var path = Path.Combine(baseDir, "appsettings.json");
+        string baseDir = AppContext.BaseDirectory;
+        string path = Path.Combine(baseDir, "appsettings.json");
         if (File.Exists(path))
         {
-            await using var fs = File.OpenRead(path);
-            var doc = await JsonDocument.ParseAsync(fs).ConfigureAwait(false);
-            if (doc.RootElement.TryGetProperty("ConnectionStrings", out var cs) &&
-                cs.TryGetProperty("DefaultConnection", out var def) &&
+            await using FileStream fs = File.OpenRead(path);
+            JsonDocument doc = await JsonDocument.ParseAsync(fs).ConfigureAwait(false);
+            if (doc.RootElement.TryGetProperty("ConnectionStrings", out JsonElement cs) &&
+                cs.TryGetProperty("DefaultConnection", out JsonElement def) &&
                 def.ValueKind == JsonValueKind.String)
             {
                 return def.GetString() ?? throw new InvalidOperationException("DefaultConnection is empty");

@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Linq;
-// Usage: dotnet run -- --file <path>    or  dotnet run -- -f <path>
+﻿// Usage: dotnet run -- --file <path>    or  dotnet run -- -f <path>
 
 async Task<int> MainAsync(string[] args)
 {
@@ -76,7 +70,9 @@ async Task<int> MainAsync(string[] args)
 
     try
     {
-        var nonMatches = await CsvDbMatcher.FindNonMatchingLineNumbersAsync(filePath, configPath, CancellationToken.None).ConfigureAwait(false);
+        var factory = new SqlCommandFactory();
+        var matcher = new CsvDbMatcher(factory);
+        var nonMatches = await matcher.FindNonMatchingLineNumbersAsync(filePath, configPath, CancellationToken.None).ConfigureAwait(false);
         if (nonMatches == null || nonMatches.Count == 0)
         {
             Console.WriteLine("All rows matched the database query.");
