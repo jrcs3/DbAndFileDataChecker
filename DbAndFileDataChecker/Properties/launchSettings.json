@@ -2,7 +2,7 @@
   "profiles": {
     "DbAndFileDataChecker": {
       "commandName": "Project",
-      "commandLineArgs": "-f C:\\Users\\ajacs\\source\\repos\\DbAndFileDataChecker\\DbAndFileDataChecker.Tests\\SampleData\\UpperMidwest.csv -c C:\\Users\\ajacs\\source\\repos\\DbAndFileDataChecker\\DbAndFileDataChecker.Tests\\RomanceCompare.json"
+      "commandLineArgs": "-f C:\\Users\\ajacs\\source\\repos\\DbAndFileDataChecker\\DbAndFileDataChecker.Tests\\SampleData\\UpperMidwest.txt -c C:\\Users\\ajacs\\source\\repos\\DbAndFileDataChecker\\DbAndFileDataChecker.Tests\\RomanceCompare.FixedWidth.json --reader fixed"
     }
   }
 }

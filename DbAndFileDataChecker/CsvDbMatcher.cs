@@ -13,10 +13,12 @@ using System.Text.Json;
 public class CsvDbMatcher
 {
     private readonly IDbCommandFactory _factory;
+    private readonly IFileReaderService _fileReaderService;
 
-    public CsvDbMatcher(IDbCommandFactory factory)
+    public CsvDbMatcher(IDbCommandFactory factory, IFileReaderService fileReaderService)
     {
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+        _fileReaderService = fileReaderService ?? throw new ArgumentNullException(nameof(fileReaderService));
     }
     /// <summary>
     /// Read CSV and JSON config files from disk and run the configured query per row.
@@ -98,23 +100,10 @@ public class CsvDbMatcher
         if (missingInCommand.Length > 0)
             throw new InvalidOperationException($"The following parameters are not referenced in CommandText: {string.Join(',', missingInCommand)}");
 
-        CsvConfiguration csvConfig = new CsvConfiguration(CultureInfo.InvariantCulture)
-        {
-            HasHeaderRecord = true,
-            MissingFieldFound = null,
-            IgnoreBlankLines = true,
-            BadDataFound = null
-        };
-
-        using StringReader reader = new StringReader(csvContent);
-        using CsvReader csv = new CsvReader(reader, csvConfig);
-
-        // Read header (line 1)
-        if (!await csv.ReadAsync().ConfigureAwait(false))
+        // Read header and rows via injected file reader service
+        string[] header = _fileReaderService.ReadHeader(csvContent, queryConfig.Columns);
+        if (header.Length == 0)
             return nonMatches; // empty file
-
-        csv.ReadHeader();
-        string[] header = csv.HeaderRecord ?? Array.Empty<string>();
 
         // Validate that all SourceColumn values exist in CSV header
         string[] missingSourceColumns = queryConfig.Parameters
@@ -143,14 +132,13 @@ public class CsvDbMatcher
         BuildParamaters(queryConfig, cmd);
 
         int fileLine = 1; // header is line 1
-
-        while (await csv.ReadAsync().ConfigureAwait(false))
+        foreach (IReadOnlyDictionary<string, string?> rowValues in _fileReaderService.ReadRows(csvContent, queryConfig.Columns))
         {
             fileLine++; // current record's file line number
             ct.ThrowIfCancellationRequested();
 
             // Set parameter values from configured SourceColumn mapping
-            bool skipRow = SetParmameters(queryConfig, nonMatches, csv, cmd, fileLine);
+            bool skipRow = SetParmameters(queryConfig, nonMatches, rowValues, cmd, fileLine);
 
             if (skipRow)
                 continue;
@@ -165,7 +153,7 @@ public class CsvDbMatcher
         return nonMatches;
     }
 
-    private static bool SetParmameters(QueryConfig queryConfig, List<int> nonMatches, CsvReader csv, DbCommand cmd, int fileLine)
+    private static bool SetParmameters(QueryConfig queryConfig, List<int> nonMatches, IReadOnlyDictionary<string, string?> rowValues, DbCommand cmd, int fileLine)
     {
         if (queryConfig.Parameters == null)
             throw new InvalidOperationException("SetParmameters: QueryConfig.Parameters is null");
@@ -175,7 +163,7 @@ public class CsvDbMatcher
         {
             string paramName = p.Name!;
             string sourceCol = p.SourceColumn ?? string.Empty;
-            string? raw = csv.TryGetField(sourceCol, out string? val) ? val?.Trim() : null;
+            string? raw = rowValues.TryGetValue(sourceCol, out string? val) ? val?.Trim() : null;
 
             string dbType = (p.DbType ?? "").Trim();
             if (dbType.Equals("int", StringComparison.OrdinalIgnoreCase))

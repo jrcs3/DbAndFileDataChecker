@@ -96,7 +96,7 @@ Here is an example of a config file named **RomanceCompare.json**:
 ``` cs
 // Usage example
 var factory = new MyDbCommandFactory(); // implements IDbCommandFactory
-var matcher = new CsvDbMatcher(factory);
+var matcher = new CsvDbMatcher(factory, new CsvHelperFileReaderService());
 
 string csvPath = "data.csv";
 string configJsonPath = "compare.json";

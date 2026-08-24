@@ -1,0 +1,37 @@
+{
+  "Name": "RomanceCompareFixedWidth",
+  "CommandText": "SELECT COUNT(*) FROM [dbo].[RomanceNovels] r\nJOIN [dbo].[Authors] a ON r.[AuthorId] = a.[AuthorId]\nJOIN [dbo].[Publishers] p ON r.[PublisherId] = p.[PublisherId]\nWHERE r.Title = @Title\n    AND a.AuthorName = @AuthorName\n    AND p.PublisherName = @PublisherName\n    AND r.PublicationYear = @PublicationYear",
+  "ConnectionString": "Server=(LocalDB)\\MSSQLLocalDB;Database=DbAndFileDataChecker;Trusted_Connection=True;TrustServerCertificate=True",
+  "Parameters": [
+    {
+      "Name": "@Title",
+      "DbType": "NVarChar",
+      "Size": -1,
+      "SourceColumn": "Title"
+    },
+    {
+      "Name": "@AuthorName",
+      "DbType": "NVarChar",
+      "Size": -1,
+      "SourceColumn": "Author"
+    },
+    {
+      "Name": "@PublisherName",
+      "DbType": "NVarChar",
+      "Size": -1,
+      "SourceColumn": "Publisher"
+    },
+    {
+      "Name": "@PublicationYear",
+      "DbType": "Int",
+      "Size": null,
+      "SourceColumn": "Publication Year"
+    }
+  ],
+  "Columns": [
+    { "Name": "Title", "StartColumn": 1, "EndColumn": 60, "Type": "string" },
+    { "Name": "Author", "StartColumn": 61, "EndColumn": 85, "Type": "string" },
+    { "Name": "Publication Year", "StartColumn": 86, "EndColumn": 89, "Type": "int" },
+    { "Name": "Publisher", "StartColumn": 96, "EndColumn": 129, "Type": "string" }
+  ]
+}

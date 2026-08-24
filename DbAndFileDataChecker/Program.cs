@@ -11,6 +11,7 @@ async Task<int> MainAsync(string[] args)
 
     string? filePath = null;
     string? configPath = null;
+    string? readerOption = null; // e.g. "csv" (default) or "fixed"
 
     for (int i = 0; i < args.Length; i++)
     {
@@ -47,6 +48,22 @@ async Task<int> MainAsync(string[] args)
         {
             configPath = a.Substring("-c=".Length);
         }
+        else if (a == "-r" || a == "--reader")
+        {
+            if (i + 1 < args.Length)
+            {
+                readerOption = args[i + 1];
+                i++;
+            }
+        }
+        else if (a.StartsWith("--reader="))
+        {
+            readerOption = a.Substring("--reader=".Length);
+        }
+        else if (a.StartsWith("-r="))
+        {
+            readerOption = a.Substring("-r=".Length);
+        }
         else if (a == "-h" || a == "--help")
         {
             PrintUsage();
@@ -71,7 +88,19 @@ async Task<int> MainAsync(string[] args)
     try
     {
         var factory = new SqlCommandFactory();
-        var matcher = new CsvDbMatcher(factory);
+
+        // Choose file reader implementation
+        IFileReaderService fileReaderService;
+        if (!string.IsNullOrWhiteSpace(readerOption) && readerOption.Equals("fixed", StringComparison.OrdinalIgnoreCase))
+        {
+            fileReaderService = new FixedWidthFileReaderService();
+        }
+        else
+        {
+            fileReaderService = new CsvHelperFileReaderService();
+        }
+
+        var matcher = new CsvDbMatcher(factory, fileReaderService);
         var nonMatches = await matcher.FindNonMatchingLineNumbersAsync(filePath, configPath, CancellationToken.None).ConfigureAwait(false);
         if (nonMatches == null || nonMatches.Count == 0)
         {
@@ -98,6 +127,7 @@ static void PrintUsage()
     Console.WriteLine("Options:");
     Console.WriteLine("  -f, --file <path>    Path to CSV file to check");
     Console.WriteLine("  -c, --config <path>  Path to JSON query config file");
+    Console.WriteLine("  -r, --reader <csv|fixed>  Choose file reader implementation (default: csv)");
     Console.WriteLine("  -h, --help           Show this help");
 }
 

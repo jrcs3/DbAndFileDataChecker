@@ -29,7 +29,7 @@ public class CsvDbMatcherSqliteTests
         string setupCommandText = setupCmdSb.ToString();
         factory.SetupDatabase(setupCommandText);
 
-        CsvDbMatcher matcher = new CsvDbMatcher(factory);
+        CsvDbMatcher matcher = new CsvDbMatcher(factory, new CsvHelperFileReaderService());
 
         // Build CSV content: header is line 1, two data rows (line 2 and 3)
         StringBuilder csvSb = new StringBuilder();
@@ -87,7 +87,7 @@ public class CsvDbMatcherSqliteTests
         }
 
         string commandText = "SELECT COUNT(*) FROM TestSongs s WHERE s.Title = @Title AND s.Artist = @Artist AND s.ReleaseYear = @Year";
-        CsvDbMatcher matcher = new CsvDbMatcher(factory);
+        CsvDbMatcher matcher = new CsvDbMatcher(factory, new CsvHelperFileReaderService());
 
         // Build CSV content: header is line 1, two data rows (line 2 and 3)
         StringBuilder csvSb = new StringBuilder();
@@ -143,7 +143,7 @@ public class CsvDbMatcherSqliteTests
         }
 
         string commandText = "SELECT COUNT(*) FROM TestArt a WHERE a.Title = @Title AND a.Artist = @Artist AND a.Year = @Year";
-        CsvDbMatcher matcher = new CsvDbMatcher(factory);
+        CsvDbMatcher matcher = new CsvDbMatcher(factory, new CsvHelperFileReaderService());
 
         // CSV with two rows that both exist in DB
         StringBuilder csvSb = new StringBuilder();
@@ -179,7 +179,7 @@ public class CsvDbMatcherSqliteTests
         // Arrange
         CancellationToken ct = CancellationToken.None;
         SqliteTestCommandFactory factory = new SqliteTestCommandFactory();
-        CsvDbMatcher matcher = new CsvDbMatcher(factory);
+        CsvDbMatcher matcher = new CsvDbMatcher(factory, new CsvHelperFileReaderService());
 
         // Build a minimal valid QueryConfig that passes validation but references a parameter in CommandText
         QueryConfig queryConfig = new QueryConfig
