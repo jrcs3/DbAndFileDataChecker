@@ -10,12 +10,12 @@ using System.Text.Json;
 // var nonMatches = await CsvDbMatcher.FindNonMatchingLineNumbersAsync("..\\DbAndFileDataChecker.Tests\\SampleData\\UpperMidwest.csv", "..\\DbAndFileDataChecker.Tests\\RomanceCompare.json");
 // Console.WriteLine(string.Join(",", nonMatches));
 
-public class CsvDbMatcher
+public class FileDbMatcher
 {
     private readonly IDbCommandFactory _factory;
     private readonly IFileReaderService _fileReaderService;
 
-    public CsvDbMatcher(IDbCommandFactory factory, IFileReaderService fileReaderService)
+    public FileDbMatcher(IDbCommandFactory factory, IFileReaderService fileReaderService)
     {
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         _fileReaderService = fileReaderService ?? throw new ArgumentNullException(nameof(fileReaderService));

@@ -100,7 +100,7 @@ async Task<int> MainAsync(string[] args)
             fileReaderService = new CsvHelperFileReaderService();
         }
 
-        var matcher = new CsvDbMatcher(factory, fileReaderService);
+        var matcher = new FileDbMatcher(factory, fileReaderService);
         var nonMatches = await matcher.FindNonMatchingLineNumbersAsync(filePath, configPath, CancellationToken.None).ConfigureAwait(false);
         if (nonMatches == null || nonMatches.Count == 0)
         {

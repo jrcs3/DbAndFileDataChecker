@@ -1,12 +1,12 @@
 # DbAndFileDataChecker
 
-Lightweight utility to compare CSV rows against a database query and report which CSV lines do not match any database row.
+Lightweight utility to compare input file records against a database query and report which file records do not match any database row. 
+It now supports CSV and Fixed With Files.
 
 ## Purpose of this project
 I need to determine if a give input file has been imported into a database. This is a simple POC of that could do that.
 I made a few simplifications for this experiment:
-- Only CSV files are supported (no Excel, JSON, etc.) 
-  It the actual use case there are fixed width files. I was going to isloate the CSV parsing but I ran out of weekend.
+- Only CSV and Fixed Width files are supported (no Excel, JSON, etc.) 
 - In the import process, all records would be inserted. 
   In the actual case, we will need to add some sort of filtering so the lines that are never imported don't create false failures.
 - There has been some token dependancy injection, but more for convenience than testability or extensibility. In the actual case, the file types will be more varied and the code will need to be more extensible. (All the Database are SQL Server.)
@@ -41,9 +41,14 @@ Build and run tests:
 - Run tests: `dotnet test`
 
 Project layout (important files):
-- `CsvDbMatcher.cs` — core logic, public API `FindNonMatchingLineNumbersAsync` / `FindNonMatchingLineNumbersFromContentAsync`.
+- `FileDbMatcher.cs` — core logic, public API `FindNonMatchingLineNumbersAsync` / `FindNonMatchingLineNumbersFromContentAsync`.
 - `QueryConfig` / `ParameterConfig` — JSON-driven configuration used to map CSV columns to query parameters.
 - `DbAndFileDataChecker.Tests` — NUnit tests that exercise the matcher; includes SQLite in-memory setup for integration-style tests.
+
+Readers
+- Use `--reader` command line switch
+  - `csv` - CSV file reader (default). Don't need populate `Columns` array in config file.
+  - `fixed` - Fixed Width file reader. Use the `Columns` array in the config file to define column positions and types.
 
 ## Config Files
 The `--config` on the command points the tool to a JSON configuration file that describes the parameterized SQL query and how CSV columns map to query parameters. 
@@ -55,12 +60,13 @@ Config files are plain JSON with a structure like:
 - `CommandText` (string): parameterized SQL containing placeholders (e.g., `@Title`).
 - `ConnectionString` (optional): DB connection string; if omitted the system falls back to defaults.
 - `Parameters` (array): items with Name (e.g., @Title), DbType (e.g., int, nvarchar), optional Size, and SourceColumn (CSV column name). The runner validates that each SourceColumn exists in the CSV header and that every parameter placeholder appears in CommandText. Supported DbType values include int, nvarchar, varchar, datetime, bit, float, decimal, and uniqueidentifier.
+- `Columns` (array, optional): for Fixed Width files, defines the start and end positions of each column in the file. Each item has Name, StartColumn, EndColumn, and Type (string, int, datetime, etc.). The runner validates that all SourceColumns referenced in Parameters are defined in Columns.
 
-Here is an example of a config file named **RomanceCompare.json**:
+Here is an example of a config file for CSV file:
 ```json
 {
   "Name": "RomanceCompare",
-  "CommandText": "SELECT COUNT(*) FROM [dbo].[RomanceNovels] r\nJOIN [dbo].[Authors] a ON r.[AuthorId] = a.[AuthorId]\nJOIN [dbo].[Publishers] p ON r.[PublisherId] = p.[PublisherId]\nWHERE r.Title = @Title\n    AND a.AuthorName = @AuthorName\n    AND p.PublisherName = @PublisherName\n    AND r.PublicationYear = @PublicationYear",
+  "CommandText": "SELECT COUNT(*) FROM [dbo].[RomanceNovels] WHERE r.Title = @Title",
   "ConnectionString": "Server=(LocalDB)\\MSSQLLocalDB;Database=DbAndFileDataChecker;Trusted_Connection=True;TrustServerCertificate=True",
   "Parameters": [
     {
@@ -68,25 +74,27 @@ Here is an example of a config file named **RomanceCompare.json**:
       "DbType": "NVarChar",
       "Size": -1,
       "SourceColumn": "Title"
-    },
-    {
-      "Name": "@AuthorName",
-      "DbType": "NVarChar",
-      "Size": -1,
-      "SourceColumn": "Author"
-    },
-    {
-      "Name": "@PublisherName",
-      "DbType": "NVarChar",
-      "Size": -1,
-      "SourceColumn": "Publisher"
-    },
-    {
-      "Name": "@PublicationYear",
-      "DbType": "Int",
-      "Size": null,
-      "SourceColumn": "Publication Year"
     }
+  ]
+}
+```
+
+And for Fixed Width file:
+```json
+{
+  "Name": "RomanceCompare",
+  "CommandText": "SELECT COUNT(*) FROM [dbo].[RomanceNovels] WHERE r.Title = @Title",
+  "ConnectionString": "Server=(LocalDB)\\MSSQLLocalDB;Database=DbAndFileDataChecker;Trusted_Connection=True;TrustServerCertificate=True",
+  "Parameters": [
+    {
+      "Name": "@Title",
+      "DbType": "NVarChar",
+      "Size": -1,
+      "SourceColumn": "Title"
+    }
+  ],
+  "Columns": [
+    { "Name": "Title", "StartColumn": 1, "EndColumn": 60, "Type": "string" }
   ]
 }
 ```
@@ -96,7 +104,8 @@ Here is an example of a config file named **RomanceCompare.json**:
 ``` cs
 // Usage example
 var factory = new MyDbCommandFactory(); // implements IDbCommandFactory
-var matcher = new CsvDbMatcher(factory, new CsvHelperFileReaderService());
+var fileReaderService = new CsvHelperFileReaderService(); // implements IFileReaderService
+var matcher = new FileDbMatcher(factory, fileReaderService);
 
 string csvPath = "data.csv";
 string configJsonPath = "compare.json";
